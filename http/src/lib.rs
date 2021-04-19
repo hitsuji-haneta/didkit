@@ -115,6 +115,7 @@ impl DIDKitHTTPSvc {
             Response::builder()
                 .status(status_code)
                 .header(CONTENT_TYPE, "application/json")
+                .header("Access-Control-Allow-Origin", "*")
                 .body(body)
                 .map_err(|err| err.into())
         })
@@ -181,6 +182,20 @@ impl DIDKitHTTPSvc {
         Self::response(StatusCode::INTERNAL_SERVER_ERROR, "Missing key".to_string())
     }
 
+    pub fn preflight(&self) -> Pin<Box<dyn Future<Output = Result<Response<Body>, Error>> + Send>> {
+        Box::pin(async move {
+            let value = json!("OK");
+            let body = Body::from(serde_json::to_vec_pretty(&value)?);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Headers", "content-type")
+                .header("Access-Control-Allow-Method", "POST, GET, OPTIONS")
+                .body(body)
+                .map_err(|err| err.into())
+        })
+    }
+
     pub fn issue_credentials(
         &self,
         req: Request<Body>,
@@ -222,6 +237,7 @@ impl DIDKitHTTPSvc {
             Response::builder()
                 .status(StatusCode::CREATED)
                 .header(CONTENT_TYPE, "application/json")
+                .header("Access-Control-Allow-Origin", "*")
                 .body(body)
                 .map_err(|err| err.into())
         })
@@ -259,6 +275,7 @@ impl DIDKitHTTPSvc {
                     false => StatusCode::BAD_REQUEST,
                 })
                 .header(CONTENT_TYPE, "application/json")
+                .header("Access-Control-Allow-Origin", "*")
                 .body(body)
                 .map_err(|err| err.into())
         })
@@ -309,6 +326,7 @@ impl DIDKitHTTPSvc {
             Response::builder()
                 .status(StatusCode::CREATED)
                 .header(CONTENT_TYPE, "application/json")
+                .header("Access-Control-Allow-Origin", "*")
                 .body(body)
                 .map_err(|err| err.into())
         })
@@ -342,6 +360,7 @@ impl DIDKitHTTPSvc {
             let body = Body::from(serde_json::to_vec_pretty(&result)?);
             Response::builder()
                 .header(CONTENT_TYPE, "application/json")
+                .header("Access-Control-Allow-Origin", "*")
                 .status(match result.errors.is_empty() {
                     true => StatusCode::OK,
                     false => StatusCode::BAD_REQUEST,
@@ -551,6 +570,10 @@ impl Service<Request<Body>> for DIDKitHTTPSvc {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
+        if req.method() == Method::OPTIONS {
+            return self.preflight();
+        }
+
         let path = req.uri().path();
         match path {
             "/issue/credentials" => return self.issue_credentials(req),
